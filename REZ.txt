@@ -1,0 +1,35 @@
+/script ResurrectPlayer()
+
+
+function ResurrectPlayer()
+    -- Create or reuse the hidden frame for event listening
+    if not ResFrame then
+        ResFrame = CreateFrame("Frame")
+    end
+    
+    -- Set up the event handler
+    ResFrame:SetScript("OnEvent", function()
+        if event == "SPELLCAST_START" and arg1 == "Rebirth" then
+            local targetName = UnitName("target")
+            if targetName then
+                -- Yell the message
+                SendChatMessage("Resurrecting " .. targetName .. " - casting now!", "YELL")
+                -- Whisper the target
+                SendChatMessage("Resurrecting YOU - casting now!", "WHISPER", nil, targetName)
+            end
+            -- Clean up events after success
+            ResFrame:UnregisterAllEvents()
+        elseif event == "SPELLCAST_FAILED" or event == "SPELLCAST_INTERRUPTED" then
+            -- Cast failed - clean up without messages
+            ResFrame:UnregisterAllEvents()
+        end
+    end)
+    
+    -- Register events right before casting
+    ResFrame:RegisterEvent("SPELLCAST_START")
+    ResFrame:RegisterEvent("SPELLCAST_FAILED")
+    ResFrame:RegisterEvent("SPELLCAST_INTERRUPTED")
+    
+    -- Attempt to cast Rebirth (uses highest rank)
+    CastSpellByName("Rebirth")
+end
