@@ -1,0 +1,71 @@
+DEPRECATED; just use CleveRoid
+https://github.com/bhhandley/CleveRoidMacros
+
+/cast !Prowl
+
+
+
+/script ProwlRavageMacro()
+
+
+function ProwlRavageMacro()
+    -- Helper function to find spell slot
+    local function GetSpellSlot(spellName)
+        local i = 1
+        while true do
+            local name = GetSpellName(i, BOOKTYPE_SPELL)
+            if not name then break end
+            if name == spellName then return i end
+            i = i + 1
+        end
+        return nil
+    end
+    
+    -- Helper function to check if we're in stealth/prowl
+    local function IsStealthed()
+        local i = 0
+        while true do
+            local buffIndex = GetPlayerBuff(i)
+            if buffIndex == -1 then break end
+            local texture = GetPlayerBuffTexture(buffIndex)
+            if texture and (string.find(texture, "Ability_Ambush") or 
+                           string.find(texture, "Ability_Stealth")) then
+                return true
+            end
+            i = i + 1
+        end
+        return false
+    end
+    
+    -- Main logic
+    local energy = UnitMana("player")
+    local targetExists = UnitExists("target")
+    local isStealthed = IsStealthed()
+    local inCombat = PlayerFrame.inCombat
+    
+    -- Step 1: Shift to cat form if not in cat form
+    if UnitPowerType("player") ~= 3 then
+        cast("Cat Form")
+        return
+    end
+    
+    -- Step 2: If we have a target and we're stealthed, use Ravage
+    if targetExists and isStealthed and energy >= 60 then
+        cast("Ravage")
+        return
+    end
+    
+    -- Step 3: If we're not stealthed and not in combat, try to Prowl
+    if not isStealthed and not inCombat and energy >= 10 then
+        local prowlSlot = GetSpellSlot("Prowl")
+        if prowlSlot then
+            local start, duration = GetSpellCooldown(prowlSlot, BOOKTYPE_SPELL)
+            if start == 0 then
+                cast("Prowl")
+                return
+            end
+        end
+    end
+    
+    -- If none of the above conditions are met, do nothing
+end
