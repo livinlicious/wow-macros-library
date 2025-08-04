@@ -1,0 +1,21 @@
+/script PowershiftSave()
+
+
+function PowershiftSave()
+    if not DruidManaLib then return end
+    
+    local currentForm = UnitPowerType("player")
+    local actualMana = DruidManaLib:GetMana()
+    local catFormCost = 304  -- Your cat form mana cost
+    
+    if currentForm == 3 then
+        -- Only powershift if we have enough mana to shift back
+        if actualMana >= catFormCost then
+            cast("Cat Form")
+        end
+    elseif currentForm == 0 then
+        if actualMana >= catFormCost then
+            cast("Cat Form")
+        end
+    end
+end
