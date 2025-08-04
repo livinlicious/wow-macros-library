@@ -1,0 +1,165 @@
+DEPRECATED;just use SMARTBUFF:
+
+https://github.com/Lexiebean/SmartBuff
+
+
+/script AutoBuff()
+
+
+function AutoBuff()
+    local useGiftInGroups=true
+    local enableThorns=true
+    local buffPets=true
+    local buffNPCs=false
+    local thornsExcludeClasses={}
+    local thornsExcludeNames={}
+    local minMana=200
+    local groupNeedThreshold=2
+
+    local function InList(item,list)
+        for _,v in ipairs(list)do
+            if v==item then return true end
+        end
+        return false
+    end
+
+    local function HasBuff(unit,texture)
+        if not UnitExists(unit)then return false end
+        for i=0,15 do
+            local buff=UnitBuff(unit,i)
+            if buff and string.find(buff,texture)then return true end
+        end
+        return false
+    end
+
+    local function IsValidUnit(unit)
+        return UnitExists(unit)and not UnitIsDead(unit)and UnitIsConnected(unit)
+    end
+
+    local function CanBuff(unit)
+        if not IsValidUnit(unit)or not UnitIsFriend("player",unit)then return false end
+        if not CheckInteractDistance(unit,4)then return false end
+        local creatureType=UnitCreatureType(unit)
+        return creatureType~="Demon"and creatureType~="Elemental"
+    end
+
+    local function NeedsThorns(unit,inRaid)
+        if not enableThorns or HasBuff(unit,"Nature_Thorns")or not IsValidUnit(unit)or inRaid then return false end
+        if UnitIsPlayer(unit)then
+            local class=UnitClass(unit)
+            local name=UnitName(unit)
+            return not InList(class,thornsExcludeClasses)and not InList(name,thornsExcludeNames)
+        end
+        return buffPets and UnitPlayerControlled(unit)and not UnitIsPlayer(unit)
+    end
+
+    local function TryCast(unit,spell,cost)
+        if not CanBuff(unit)or UnitMana("player")<(cost+minMana)then return false end
+        TargetUnit(unit)
+        if not UnitExists("target")or UnitName("target")~=UnitName(unit)then return false end
+        local preMana=UnitMana("player")
+        cast(spell)
+        return UnitMana("player")<preMana
+    end
+
+    local inRaid=GetNumRaidMembers()>0
+    local inParty=GetNumPartyMembers()>0 and not inRaid
+    local units={"player"}
+    local raidGroups={}
+    if inParty then
+        for i=1,4 do
+            table.insert(units,"party"..i)
+            if buffPets then table.insert(units,"partypet"..i)end
+        end
+    elseif inRaid then
+        for g=1,8 do
+            raidGroups[g]={}
+            for m=1,5 do
+                local u="raid"..((g-1)*5+m)
+                if UnitExists(u)then table.insert(raidGroups[g],u)end
+                if buffPets then
+                    local p="raidpet"..((g-1)*5+m)
+                    if UnitExists(p)then table.insert(raidGroups[g],p)end
+                end
+            end
+        end
+    end
+    if UnitExists("target")and UnitIsFriend("player","target")then
+        table.insert(units,1,"target")
+    end
+
+    local wildSpell,wildCost
+    if inRaid or inParty then
+        local groupsNeeding=inRaid and raidGroups or {{unpack(units)}}
+        for _,group in ipairs(groupsNeeding)do
+            local needCount=0
+            local needyUnit=nil
+            for _,unit in ipairs(group)do
+                if IsValidUnit(unit)and not HasBuff(unit,"Nature_Regeneration")and CanBuff(unit)then
+                    needCount=needCount+1
+                    if not needyUnit then needyUnit=unit end
+                end
+            end
+            if needCount>=groupNeedThreshold and useGiftInGroups then
+                wildSpell="Gift of the Wild"
+                wildCost=1000
+                if needyUnit and TryCast(needyUnit,wildSpell,wildCost)then return end
+            elseif needCount>0 then
+                wildSpell="Mark of the Wild"
+                wildCost=285
+                for _,unit in ipairs(group)do
+                    if IsValidUnit(unit)and not HasBuff(unit,"Nature_Regeneration")and CanBuff(unit)then
+                        if TryCast(unit,wildSpell,wildCost)then return end
+                    end
+                end
+            end
+        end
+    else
+        wildSpell="Mark of the Wild"
+        wildCost=285
+        for _,unit in ipairs(units)do
+            if IsValidUnit(unit)and not HasBuff(unit,"Nature_Regeneration")and CanBuff(unit)then
+                if TryCast(unit,wildSpell,wildCost)then return end
+            end
+        end
+    end
+
+    if enableThorns and not inRaid then
+        for _,unit in ipairs(units)do
+            if NeedsThorns(unit,inRaid)and CanBuff(unit)then
+                if TryCast(unit,"Thorns",340)then return end
+            end
+        end
+    end
+
+    if buffNPCs then
+        local oldTarget=UnitName("target")
+        local attempts=0
+        ClearTarget()
+        while attempts<20 do
+            TargetNearestFriend()
+            attempts=attempts+1
+            if not UnitExists("target")then break end
+            local targetName=UnitName("target")
+            if targetName and CanBuff("target")then
+                local isKnown=false
+                for _,unit in ipairs(units)do
+                    if UnitExists(unit)and UnitName(unit)==targetName then
+                        isKnown=true
+                        break
+                    end
+                end
+                if not isKnown then
+                    if not HasBuff("target","Nature_Regeneration")then
+                        if TryCast("target",wildSpell,wildCost)then return end
+                    elseif NeedsThorns("target",inRaid)then
+                        if TryCast("target","Thorns",340)then return end
+                    end
+                end
+            end
+        end
+        if oldTarget then TargetByName(oldTarget)else ClearTarget()end
+    end
+
+    TargetLastEnemy()
+end
