@@ -1,0 +1,76 @@
+/run s={"Attack","Shred","Claw"} if q==nil then q=0 end q=q+1 if q>getn(s) then q=1 end CastSpellByName(s[q])
+
+
+
+/run s={"Attack","Shred","Claw"} if q==nil then q=0 end 
+/run if UnitAffectingCombat("player") and q==2 and UnitMana("player")<80 then q=0 else q=q+1 if q>getn(s) then q=1 end end
+/run CastSpellByName(s[q])
+
+
+
+
+
+/script Shredder()
+
+
+function Shredder()
+    -- EASY CONFIGURATION - Change these values as needed
+    local spellSequence = {"Attack", "Shred", "Claw"}    -- Spell rotation sequence
+    local energyThreshold = 60                           -- Energy check for Shred reset
+    local autoTarget = true                              -- Auto-target nearest enemy
+    local debugMode = false                              -- Print debug messages
+    
+    -- Initialize global counter if it doesn't exist
+    if ShredderCounter == nil then 
+        ShredderCounter = 0 
+    end
+    
+    -- Auto-target if enabled and no target exists
+    if autoTarget and not UnitExists("target") then
+        TargetNearestEnemy()
+        if not UnitExists("target") then
+            if debugMode then
+                DEFAULT_CHAT_FRAME:AddMessage("Shredder: No target found")
+            end
+            return
+        end
+    end
+    
+    -- Check if we're in cat form (power type 3 = energy)
+    if UnitPowerType("player") ~= 3 then
+        CastSpellByName("Cat Form")
+        if debugMode then
+            DEFAULT_CHAT_FRAME:AddMessage("Shredder: Switching to Cat Form")
+        end
+        return
+    end
+    
+    -- Core logic: Reset counter if in combat, at Shred position, and low energy
+    if UnitAffectingCombat("player") and ShredderCounter == 2 and UnitMana("player") < energyThreshold then
+        ShredderCounter = 0
+        if debugMode then
+            DEFAULT_CHAT_FRAME:AddMessage("Shredder: Energy too low for Shred, resetting to Attack")
+        end
+    else
+        -- Normal increment
+        ShredderCounter = ShredderCounter + 1
+        -- Fixed: Use table.getn() or # operator instead of getn()
+        if ShredderCounter > table.getn(spellSequence) then
+            ShredderCounter = 1
+        end
+    end
+    
+    -- Cast the spell with nil check
+    local spellToCast = spellSequence[ShredderCounter]
+    if spellToCast and spellToCast ~= "" then
+        CastSpellByName(spellToCast)
+        
+        if debugMode then
+            DEFAULT_CHAT_FRAME:AddMessage("Shredder: Casting " .. spellToCast .. " (position " .. ShredderCounter .. ")")
+        end
+    else
+        if debugMode then
+            DEFAULT_CHAT_FRAME:AddMessage("Shredder: Invalid spell at position " .. ShredderCounter)
+        end
+    end
+end
