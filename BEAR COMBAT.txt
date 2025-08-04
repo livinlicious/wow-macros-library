@@ -1,0 +1,91 @@
+/script BearCombat()
+
+
+
+function BearCombat()
+    local rage = UnitMana("player")
+    
+    -- Helper functions
+    local function GetSpellSlot(spell)
+        for i = 1, 200 do
+            local name = GetSpellName(i, BOOKTYPE_SPELL)
+            if not name then break end
+            if name == spell then return i end
+        end
+        return nil
+    end
+    
+    local function OnCooldown(spell)
+        local slot = GetSpellSlot(spell)
+        if slot then
+            local start, duration = GetSpellCooldown(slot, BOOKTYPE_SPELL)
+            return start > 0 and duration > 1.5
+        end
+        return true
+    end
+    
+    local function HasDebuff(unit, debuff)
+        for i = 1, 16 do
+            local texture = UnitDebuff(unit, i)
+            if texture and string.find(texture, debuff) then return true end
+        end
+        return false
+    end
+    
+    local function HasAggro()
+        return UnitExists("target") and UnitExists("targettarget") and 
+               UnitName("targettarget") == UnitName("player")
+    end
+    
+    -- Form check and shift
+    if UnitPowerType("player") ~= 1 then
+        local bearForm = GetSpellSlot("Dire Bear Form") and "Dire Bear Form" or "Bear Form"
+        if bearForm then cast(bearForm) end
+        return
+    end
+    
+    -- Target management
+    if not UnitExists("target") or UnitIsDead("target") or not UnitCanAttack("player", "target") then
+        TargetNearestEnemy()
+        if not UnitExists("target") then return end
+    end
+    
+    -- Growl for aggro
+    if not HasAggro() and not OnCooldown("Growl") then
+        cast("Growl")
+        return
+    end
+    
+    -- Start auto attack
+    if not PlayerFrame.inCombat then AttackTarget() end
+    
+    -- Auto attack toggle
+    for z = 1, 172 do 
+        if IsAttackAction(z) and not IsCurrentAction(z) then 
+            UseAction(z)
+            break
+        end
+    end
+    
+    -- Combat rotation
+    if not OnCooldown("Faerie Fire (Feral)") and not HasDebuff("target", "Spell_Nature_FaerieFire") then
+        cast("Faerie Fire (Feral)")
+        return
+    end
+    
+    if rage >= 60 then
+        if not OnCooldown("Swipe") then
+            cast("Swipe")
+        else
+            cast("Maul")
+        end
+    elseif rage >= 20 then
+        if not HasDebuff("target", "Spell_Nature_Demoralizing") and not OnCooldown("Demoralizing Roar") then
+            cast("Demoralizing Roar")
+        else
+            cast("Maul")
+        end
+    else
+        cast("Maul")
+    end
+end
