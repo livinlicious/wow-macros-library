@@ -1,0 +1,94 @@
+/script AntiSlowTravel()
+
+
+function AntiSlowTravel()
+    local shapeshifts = GetNumShapeshiftForms()
+    local currentForm = nil
+    
+    -- Check current form
+    for i = 1, shapeshifts do
+        local icon, name, active, castable = GetShapeshiftFormInfo(i)
+        if active == 1 then
+            currentForm = i
+            break
+        end
+    end
+    
+    -- Check for movement impairing debuffs (improved detection)
+    local isImpaired = false
+    for i = 1, 40 do  -- Increased from 16 to 40 (modern WoW supports up to 40 debuffs)
+        local name, rank, texture, count, debuffType, duration, expirationTime = UnitDebuff("player", i)
+        if name then
+            -- Check for specific movement impairing spell names
+            local impairingSpells = {
+                "Frost Nova", "Entangling Roots", "Hamstring", "Wing Clip", 
+                "Concussive Shot", "Chains of Ice", "Slow", "Crippling Poison",
+                "Curse of Exhaustion", "Frostbolt", "Cone of Cold", "Blizzard",
+                "Piercing Howl", "Thunderclap", "Infected Wounds", "Faerie Fire",
+                "Polymorph", "Hex", "Fear", "Psychic Scream", "Intimidating Shout"
+            }
+            
+            -- Check by spell name (more reliable than texture)
+            for _, spell in ipairs(impairingSpells) do
+                if string.find(string.lower(name), string.lower(spell)) then
+                    isImpaired = true
+                    break
+                end
+            end
+            
+            -- Also check by debuff type for some categories
+            if debuffType and (debuffType == "Magic" or debuffType == "Curse") then
+                -- Additional checks for magic/curse effects that might impair movement
+                if string.find(string.lower(name), "slow") or 
+                   string.find(string.lower(name), "root") or
+                   string.find(string.lower(name), "snare") or
+                   string.find(string.lower(name), "crippl") then
+                    isImpaired = true
+                end
+            end
+            
+            if isImpaired then break end
+        end
+    end
+    
+    -- If movement impaired, break CC by shifting out and back in
+    if isImpaired and currentForm then
+        -- First shift out to break the effect
+        CastShapeshiftForm(currentForm)
+        UIErrorsFrame:Clear()
+        -- Small delay then shift back in (this happens on next macro press)
+        return
+    end
+    
+    -- If already in Travel or Aquatic form, stay in current form (spam-safe)
+    if currentForm then
+        local icon, name, active, castable = GetShapeshiftFormInfo(currentForm)
+        if string.find(name, "Travel") or string.find(name, "Aquatic") or string.find(name, "Seal") then
+            UIErrorsFrame:Clear()
+            return
+        end
+    end
+    
+    -- Find aquatic and travel forms
+    local aquaticForm, travelForm = nil, nil
+    
+    for i = 1, shapeshifts do
+        local icon, name, active, castable = GetShapeshiftFormInfo(i)
+        if string.find(name, "Aquatic") or string.find(name, "Seal") then
+            aquaticForm = i
+        elseif string.find(name, "Travel") then
+            travelForm = i
+        end
+    end
+    
+    -- Try aquatic first, then travel (this will directly shift from any form)
+    if aquaticForm then
+        CastShapeshiftForm(aquaticForm)
+    end
+    if travelForm then
+        CastShapeshiftForm(travelForm)
+    end
+    
+    -- Clear any error messages
+    UIErrorsFrame:Clear()
+end
