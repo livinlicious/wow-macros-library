@@ -1,0 +1,83 @@
+/cast [nocombat, nomybuff] !Swift Travel Form
+/cast [nocombat, nomybuff:"Swift Travel Form"] !Plainsrunning
+/script TravelAquatic()
+
+
+
+function TravelAquatic()
+    local inCombat = UnitAffectingCombat("player")
+  
+    -- Get current form index (inlined)
+    local currentForm = nil
+    for i = 1, GetNumShapeshiftForms() do
+        local _, _, active = GetShapeshiftFormInfo(i)
+        if active == 1 then
+            currentForm = i
+            break
+        end
+    end
+  
+    -- Find forms
+    local aquaticForm, travelForm = nil, nil
+    for i = 1, GetNumShapeshiftForms() do
+        local _, name = GetShapeshiftFormInfo(i)
+        if name then
+            if string.find(name, "Aquatic") or string.find(name, "Seal") then
+                aquaticForm = i
+            elseif string.find(name, "Travel") then
+                travelForm = i
+            end
+        end
+    end
+  
+    -- Check buffs
+    local hasSwift, hasPlains = false, false
+    for i = 1, 16 do
+        local texture = UnitBuff("player", i)
+        if texture then
+            if string.find(texture, "Ability_Druid_TravelForm") then hasSwift = true end
+            if string.find(texture, "Spell_Nature_SpiritWolf") then hasPlains = true end
+        end
+    end
+  
+    -- Attempt Aquatic if possible and not in it (always check, combat or not)
+    if aquaticForm and currentForm ~= aquaticForm then
+        local _, _, _, castable = GetShapeshiftFormInfo(aquaticForm)
+        if castable then
+            CastShapeshiftForm(aquaticForm)
+            UIErrorsFrame:Clear()
+          
+            -- Re-check if shift succeeded (inlined)
+            local newForm = nil
+            for j = 1, GetNumShapeshiftForms() do
+                local _, _, active = GetShapeshiftFormInfo(j)
+                if active == 1 then
+                    newForm = j
+                    break
+                end
+            end
+            if newForm == aquaticForm then
+                return
+            end
+        end
+    elseif currentForm == aquaticForm then
+        local _, _, _, castable = GetShapeshiftFormInfo(aquaticForm)
+        if castable then
+            return
+        end
+    end
+  
+    -- After Aquatic check: Bail if not in combat
+    if not inCombat then
+        UIErrorsFrame:Clear()
+        return
+    end
+  
+    -- In combat, fallback to Travel if no buffs and not in Travel
+    if not hasSwift and not hasPlains and currentForm ~= travelForm then
+        if travelForm then
+            CastShapeshiftForm(travelForm)
+            UIErrorsFrame:Clear()
+        end
+    end
+end
