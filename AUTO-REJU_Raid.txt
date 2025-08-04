@@ -1,0 +1,184 @@
+/script AutoReju()
+
+
+function AutoReju()
+    local threshold = 80
+    local rejuCost = 360
+    local oldTarget = UnitName("target")
+
+    -- Mana check
+    if UnitMana("player") < rejuCost then return end
+
+    -- Check if unit has Rejuvenation
+    local function HasReju(unit)
+        if not UnitExists(unit) then return false end
+        
+        -- Check using UnitBuff (more reliable for other players)
+        for i = 1, 16 do
+            local texture = UnitBuff(unit, i)
+            if texture and (string.find(texture, "Spell_Nature_Rejuvenation") or 
+                           string.find(texture, "Rejuvenation")) then
+                return true
+            end
+        end
+        
+        -- Fallback to GetPlayerBuff for party/raid members
+        for i = 0, 15 do
+            local buff = GetPlayerBuff(i, unit)
+            if buff ~= -1 then
+                local texture = GetPlayerBuffTexture(buff)
+                if texture and (string.find(texture, "Spell_Nature_Rejuvenation") or
+                               string.find(texture, "Rejuvenation")) then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    -- Check if unit needs healing
+    local function NeedsHeal(unit)
+        if not UnitExists(unit) or UnitIsDead(unit) then return false end
+        if not UnitIsFriend("player", unit) then return false end
+        if HasReju(unit) then return false end
+
+        local hp = UnitHealth(unit)
+        local maxhp = UnitHealthMax(unit)
+        if hp == 0 or maxhp == 0 then return false end
+
+        return (hp / maxhp * 100) < threshold
+    end
+
+    -- Cast on unit with range check
+    local function CastReju(unit)
+        TargetUnit(unit)
+        if UnitExists("target") then
+            -- Check if target is in range (30 yards for Rejuvenation)
+            if CheckInteractDistance("target", 4) or SpellIsTargeting() then
+                cast("Rejuvenation()")
+                return true
+            end
+        end
+        return false
+    end
+
+    -- Check mouseover first
+    if NeedsHeal("mouseover") then
+        if CastReju("mouseover") then
+            if oldTarget then TargetByName(oldTarget) end
+            return
+        end
+    end
+
+    -- Check current target
+    if NeedsHeal("target") then
+        -- Only cast if target is in range
+        if CheckInteractDistance("target", 4) then
+            cast("Rejuvenation()")
+            return
+        end
+    end
+
+    -- Check party members
+    for i = 1, 4 do
+        local unit = "party" .. i
+        if NeedsHeal(unit) then
+            if CastReju(unit) then
+                if oldTarget then TargetByName(oldTarget) end
+                return
+            end
+        end
+    end
+
+    -- Check raid members
+    for i = 1, 40 do
+        local unit = "raid" .. i
+        if NeedsHeal(unit) then
+            if CastReju(unit) then
+                if oldTarget then TargetByName(oldTarget) end
+                return
+            end
+        end
+    end
+
+    -- Check player
+    if NeedsHeal("player") then
+        TargetUnit("player")
+        cast("Rejuvenation()")
+        if oldTarget then TargetByName(oldTarget) end
+        return
+    end
+
+    -- Find nearest injured friendly (only if no valid targets found above)
+    local foundValidTarget = false
+    ClearTarget()
+    TargetNearestFriend()
+    if NeedsHeal("target") and CheckInteractDistance("target", 4) then
+        cast("Rejuvenation()")
+        foundValidTarget = true
+    end
+
+    -- Only heal self if no valid targets in range were found
+    if not foundValidTarget and NeedsHeal("player") then
+        TargetUnit("player")
+        cast("Rejuvenation()")
+    end
+
+    -- Restore target
+    if oldTarget then TargetByName(oldTarget) end
+end
+
+-- Ultra-simple version
+function SimpleReju()
+    if UnitMana("player") < 205 then return end
+
+    local function NeedsHeal(unit)
+        if not UnitExists(unit) or UnitIsDead(unit) then return false end
+        
+        -- Check if already has Rejuvenation
+        for i = 1, 16 do
+            local texture = UnitBuff(unit, i)
+            if texture and string.find(texture, "Rejuvenation") then
+                return false
+            end
+        end
+        
+        local hp = UnitHealth(unit) / UnitHealthMax(unit) * 100
+        return hp < 40 and hp > 0
+    end
+
+    -- Mouseover priority
+    if NeedsHeal("mouseover") then
+        local old = UnitName("target")
+        TargetUnit("mouseover")
+        if CheckInteractDistance("target", 4) then
+            cast("Rejuvenation()")
+            if old then TargetByName(old) end
+            return
+        end
+        if old then TargetByName(old) end
+    end
+
+    -- Current target
+    if NeedsHeal("target") and CheckInteractDistance("target", 4) then
+        cast("Rejuvenation()")
+        return
+    end
+
+    -- Find injured friendly
+    local old = UnitName("target")
+    local foundValidTarget = false
+    TargetNearestFriend()
+    if NeedsHeal("target") and CheckInteractDistance("target", 4) then
+        cast("Rejuvenation()")
+        foundValidTarget = true
+    end
+    
+    -- Only self-heal if no valid targets in range
+    if not foundValidTarget and NeedsHeal("player") then
+        TargetUnit("player")
+        cast("Rejuvenation()")
+    end
+    
+    if old then TargetByName(old) end
+end
