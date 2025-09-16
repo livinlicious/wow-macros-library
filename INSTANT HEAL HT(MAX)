@@ -1,0 +1,3 @@
+#showtooltip Nature's Swiftness
+/cast [nocooldown:"Nature's Swiftness", help, hp:<70] !Nature's Swiftness
+/cast [mybuff:"Nature's Swiftness", help] Healing Touch
