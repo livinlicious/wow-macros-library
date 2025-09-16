@@ -1,0 +1,121 @@
+/script SpamCast()
+
+
+
+function SpamCast()
+    -- ===== CONFIGURABLE SETTINGS =====
+    local SPELL_NAME = "Rejuvenation"     -- Change to "Renew", etc.
+    local SPELL_RANK = 0                  -- 0 = highest rank
+    local BUFF_NAME = "rejuvenation"      -- Change to "renew", etc.  
+    local BLACKLIST_TIME = 12             -- Seconds to blacklist after successful cast
+    -- ==================================
+    
+    -- Initialize systems
+    if not SpellBlacklist then SpellBlacklist = {} end
+    if not GCDFrame then GCDFrame = CreateFrame("Frame") end
+    
+    -- Helper function to find spell slot (for GCD detection)
+    local function FindSpellSlot(spellName)
+        local baseName = spellName
+        local _, _, base = string.find(spellName, "(.+)%(Rank %d+%)")
+        if base then baseName = base end
+        
+        for i = 1, 200 do
+            local name = GetSpellName(i, BOOKTYPE_SPELL)
+            if not name then break end
+            if name == baseName then
+                return i
+            end
+        end
+        return nil
+    end
+    
+    -- Helper function to get spell name with rank
+    local function GetSpellNameWithRank(baseName, rank)
+        if rank == 0 then
+            return baseName
+        else
+            return baseName .. "(Rank " .. rank .. ")"
+        end
+    end
+    
+    -- Helper function to check if spell is castable
+    local function CanCastSpell(spellName)
+        local baseName = spellName
+        local _, _, base = string.find(spellName, "(.+)%(Rank %d+%)")
+        if base then baseName = base end
+        
+        for i = 1, 200 do
+            local name = GetSpellName(i, BOOKTYPE_SPELL)
+            if not name then break end
+            if name == baseName then
+                local start, duration = GetSpellCooldown(i, BOOKTYPE_SPELL)
+                return start == 0
+            end
+        end
+        return false
+    end
+    
+    -- Determine target
+    local t = "player"
+    if UnitExists("target") and UnitIsFriend("player", "target") and not UnitIsDeadOrGhost("target") then
+        t = "target"
+    end
+    local self = (t == "player") and 1 or nil
+    local unitName = UnitName(t)
+    if not unitName then return end
+    
+    -- Check if target is blacklisted
+    local blacklistKey = SPELL_NAME .. "_" .. unitName
+    local lastCast = SpellBlacklist[blacklistKey]
+    if lastCast and (GetTime() - lastCast) < BLACKLIST_TIME then
+        return -- Still blacklisted
+    end
+    
+    -- Check if target already has the buff
+    if buffed(BUFF_NAME, t) then
+        return -- Already has buff
+    end
+    
+    -- Get full spell name and check if castable
+    local fullSpellName = GetSpellNameWithRank(SPELL_NAME, SPELL_RANK)
+    if not CanCastSpell(fullSpellName) then
+        return -- Spell not ready
+    end
+    
+    -- Find the spell slot for GCD detection
+    local gcdSpellSlot = FindSpellSlot(SPELL_NAME)
+    if not gcdSpellSlot then
+        return -- Spell not found in spellbook
+    end
+    
+    -- Cast the spell
+    cast(fullSpellName, self)
+    
+    -- Set up GCD detection for success verification
+    GCDFrame.checkTime = GetTime() + 0.3
+    GCDFrame.blacklistKey = blacklistKey
+    GCDFrame.gcdSlot = gcdSpellSlot
+    
+    GCDFrame:SetScript("OnUpdate", function()
+        if GetTime() >= GCDFrame.checkTime then
+            -- Check if GCD is still active using the spell's own slot
+            local start, duration = GetSpellCooldown(GCDFrame.gcdSlot, BOOKTYPE_SPELL)
+            local gcdRemaining = 0
+            if start and duration and duration > 0 then
+                gcdRemaining = (start + duration) - GetTime()
+            end
+            
+            if gcdRemaining > 0 then
+                -- Cast succeeded, blacklist the target
+                SpellBlacklist[GCDFrame.blacklistKey] = GetTime()
+            end
+            
+            -- Clean up
+            GCDFrame:SetScript("OnUpdate", nil)
+            GCDFrame.checkTime = nil
+            GCDFrame.blacklistKey = nil
+            GCDFrame.gcdSlot = nil
+        end
+    end)
+end
