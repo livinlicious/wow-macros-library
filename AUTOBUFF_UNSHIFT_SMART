@@ -1,0 +1,109 @@
+Use Smartbuff:
+https://github.com/Lexiebean/SmartBuff
+configure /sb menu
+
+
+/script AutoBuffCheck()
+/sb
+
+
+
+function AutoBuffCheck()
+    local oldTarget = UnitName("target")
+    
+    -- Check if we're in any form
+    local inForm = false
+    for i = 1, GetNumShapeshiftForms() do
+        local _, _, active = GetShapeshiftFormInfo(i)
+        if active then
+            inForm = true
+            break
+        end
+    end
+    
+    -- If not in form, do nothing
+    if not inForm then 
+        if oldTarget then TargetByName(oldTarget) end
+        return 
+    end
+    
+    -- Use your exact working HasMotW pattern
+    local function HasMotW(unit)
+        if not UnitExists(unit) then return true end
+        
+        for i = 1, 16 do
+            local texture = UnitBuff(unit, i)
+            if texture and (string.find(texture, "Spell_Nature_Regeneration") or 
+                           string.find(texture, "Mark of the Wild")) then
+                return true
+            end
+        end
+        return false
+    end
+    
+    -- Check if unit needs buff AND is in range (like your rejuvenation macro)
+    local function NeedsMotW(unit)
+        if not UnitExists(unit) or UnitIsDead(unit) then return false end
+        if not UnitIsFriend("player", unit) then return false end
+        if not UnitIsConnected(unit) then return false end
+        
+        -- KEY FIX: Check if in range using the SAME method as your rejuvenation macro
+        -- Target the unit temporarily to check range
+        local currentTarget = UnitName("target")
+        TargetUnit(unit)
+        local inRange = CheckInteractDistance("target", 4)
+        if currentTarget then 
+            TargetByName(currentTarget) 
+        else 
+            ClearTarget() 
+        end
+        
+        -- Only return true if in range AND missing buff
+        return inRange and not HasMotW(unit)
+    end
+    
+    -- Function to unshift
+    local function UnshiftMe()
+        for i = 1, GetNumShapeshiftForms() do
+            local _, _, active = GetShapeshiftFormInfo(i)
+            if active then
+                CastShapeshiftForm(i)
+                return
+            end
+        end
+    end
+    
+    -- Check everyone - if ANYONE in range needs it, unshift
+    local someoneNeedsIt = false
+    
+    -- Check player (always in range)
+    if not HasMotW("player") then someoneNeedsIt = true end
+    
+    -- Check party members (only if in range)
+    if not someoneNeedsIt then
+        for i = 1, 4 do
+            if NeedsMotW("party" .. i) then
+                someoneNeedsIt = true
+                break
+            end
+        end
+    end
+    
+    -- Check raid members (only if in range)
+    if not someoneNeedsIt then
+        for i = 1, 40 do
+            if NeedsMotW("raid" .. i) then
+                someoneNeedsIt = true
+                break
+            end
+        end
+    end
+    
+    -- Only unshift if someone in range actually needs it
+    if someoneNeedsIt then
+        UnshiftMe()
+    end
+    
+    -- Restore target
+    if oldTarget then TargetByName(oldTarget) end
+end
