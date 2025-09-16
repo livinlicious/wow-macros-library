@@ -9,6 +9,7 @@ function HealSequence()
     local REGROWTH_RANK = 0
     local REJUVENATION_RANK = 0
     local REJUV_BLOCK_TIME = 12
+    local ENABLE_MOUSEOVER = false
     -- ==================================
     
     -- Initialize timing system
@@ -24,14 +25,31 @@ function HealSequence()
         return (hour * 3600) + (min * 60) + sec
     end
     
-    -- Determine heal target
+    -- Determine heal target with mouseover priority (VANILLA METHOD)
     local t = "player"
-    if UnitExists("target") and UnitIsFriend("player", "target") and not UnitIsDeadOrGhost("target") then
+    local self = 1
+    local originalTarget = UnitName("target")
+    local targetSwitched = false
+    
+    if ENABLE_MOUSEOVER and UnitExists("mouseover") and UnitIsFriend("player", "mouseover") and not UnitIsDeadOrGhost("mouseover") then
+        -- Store current target, switch to mouseover
+        TargetUnit("mouseover")
         t = "target"
+        self = nil
+        targetSwitched = true
+    elseif UnitExists("target") and UnitIsFriend("player", "target") and not UnitIsDeadOrGhost("target") then
+        t = "target"
+        self = nil
     end
-    local self = (t == "player") and 1 or nil
+    
     local unitName = UnitName(t)
-    if not unitName then unitName = "Unknown" end
+    if not unitName then 
+        -- Restore original target if we switched
+        if targetSwitched and originalTarget then
+            TargetByName(originalTarget)
+        end
+        return 
+    end
     
     -- Check if rejuvenation should be skipped
     local function ShouldSkipRejuv(unitName)
@@ -48,7 +66,6 @@ function HealSequence()
         return false
     end
     
-    -- [All your other functions: GetSpellNameWithRank, IsInTreeForm, CanCastSpell, etc.]
     local function GetSpellNameWithRank(baseName, rank)
         if rank == 0 then
             return baseName
@@ -108,6 +125,11 @@ function HealSequence()
     elseif not buffed("rejuvenation", t) and not ShouldSkipRejuv(unitName) and CanCastSpell(rejuvenationSpell) then 
         cast(rejuvenationSpell, self)
         
+        -- Restore original target after casting rejuvenation
+        if targetSwitched and originalTarget then
+            TargetByName(originalTarget)
+        end
+        
         -- Set up delayed GCD check to verify cast success
         GCDFrame.checkTime = GetTime() + 0.3
         GCDFrame.targetName = unitName
@@ -149,5 +171,10 @@ function HealSequence()
     -- Cast the spell (for non-rejuvenation spells)
     if spellToCast and CanCastSpell(spellToCast) then
         cast(spellToCast, self)
+    end
+    
+    -- Restore original target after casting any other spell
+    if targetSwitched and originalTarget then
+        TargetByName(originalTarget)
     end
 end
