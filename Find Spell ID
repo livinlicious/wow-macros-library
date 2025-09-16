@@ -1,0 +1,5 @@
+/run for i=1,200 do local n=GetSpellName(i,BOOKTYPE_SPELL)if not n then break end if n=="Innervate"then print("Innervate at slot "..i)break end end
+
+Replace "Innervate" with name of the Skill you need.
+Example if you run this:
+"Innervate at slot 131"
