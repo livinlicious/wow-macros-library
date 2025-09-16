@@ -1,0 +1,25 @@
+/script EatFood()
+
+function EatFood()
+    -- Don't eat if in combat
+    if UnitAffectingCombat("player") then
+        return
+    end
+  
+    -- Don't eat if already eating
+    if buffed("Food", "player") or buffed("Drink", "player") then
+        return
+    end
+  
+    -- Try to use items directly - let the game handle if they exist or not
+    UseItemByName("Conjured Mana Orange")
+    UseItemByName("Enriched Manna Biscuit")
+end
+
+
+
+Sort priority by sorting the Food in order:
+    UseItemByName("Conjured Mana Orange")
+    UseItemByName("Enriched Manna Biscuit")
+
+Uses "Conjured Mana Orange" -> "Enriched Manna Biscuit" -> etc.
