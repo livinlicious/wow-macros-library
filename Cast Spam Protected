@@ -4,12 +4,13 @@
 
 function SpamCast()
     -- ===== CONFIGURABLE SETTINGS =====
-    local SPELL_NAME = "Rejuvenation"     -- Change to "Renew", etc.
-    local SPELL_RANK = 0                  -- 0 = highest rank
-    local BUFF_NAME = "rejuvenation"      -- Change to "renew", etc.  
-    local BLACKLIST_TIME = 12             -- Seconds to blacklist after successful cast
+    local SPELL_NAME = "Rejuvenation"     
+    local SPELL_RANK = 0                  
+    local BUFF_NAME = "rejuvenation"      
+    local BLACKLIST_TIME = 12             
+    local ENABLE_MOUSEOVER = true         
     -- ==================================
-    
+
     -- Initialize systems
     if not SpellBlacklist then SpellBlacklist = {} end
     if not GCDFrame then GCDFrame = CreateFrame("Frame") end
