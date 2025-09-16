@@ -1,6 +1,10 @@
 NOTE: DEPRECATED because of Reshift, example:
 /cast [myrawpower:<=0] Reshift
 
+Use CleveRoid:
+https://github.com/bhhandley/CleveRoidMacros
+
+
 
 /script PowershiftSave()
 
