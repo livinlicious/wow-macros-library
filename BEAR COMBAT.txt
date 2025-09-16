@@ -1,91 +1,110 @@
 /script BearCombat()
 
 
-
 function BearCombat()
-    local rage = UnitMana("player")
-    
+    -- CONFIG
+    local useFaerieFire = true
+    local useDemoRoar = true
+    local autoAttack = true
+    local demoRoarRageThreshold = 30
+
     -- Helper functions
-    local function GetSpellSlot(spell)
-        for i = 1, 200 do
+    local function GetSpellSlot(spellName)
+        local i = 1
+        while true do
             local name = GetSpellName(i, BOOKTYPE_SPELL)
             if not name then break end
-            if name == spell then return i end
+            if name == spellName then return i end
+            i = i + 1
         end
         return nil
     end
-    
-    local function OnCooldown(spell)
-        local slot = GetSpellSlot(spell)
+
+    local function IsSpellOnCooldown(spellName)
+        local slot = GetSpellSlot(spellName)
         if slot then
-            local start, duration = GetSpellCooldown(slot, BOOKTYPE_SPELL)
-            return start > 0 and duration > 1.5
+            local start = GetSpellCooldown(slot, BOOKTYPE_SPELL)
+            return start > 0
         end
         return true
     end
-    
-    local function HasDebuff(unit, debuff)
+
+    local function HasDebuff(debuffTexture)
         for i = 1, 16 do
-            local texture = UnitDebuff(unit, i)
-            if texture and string.find(texture, debuff) then return true end
+            local texture = UnitDebuff("target", i)
+            if texture and string.find(texture, debuffTexture) then
+                return true
+            end
         end
         return false
     end
-    
-    local function HasAggro()
-        return UnitExists("target") and UnitExists("targettarget") and 
-               UnitName("targettarget") == UnitName("player")
-    end
-    
-    -- Form check and shift
+
+    -- Main logic
+    local rage = UnitMana("player")
+    local targetExists = UnitExists("target")
+
+    -- Bear form check
     if UnitPowerType("player") ~= 1 then
-        local bearForm = GetSpellSlot("Dire Bear Form") and "Dire Bear Form" or "Bear Form"
-        if bearForm then cast(bearForm) end
+        CastSpellByName("Dire Bear Form")
         return
     end
-    
-    -- Target management
-    if not UnitExists("target") or UnitIsDead("target") or not UnitCanAttack("player", "target") then
+
+    -- Target check and auto-target nearest
+    if not targetExists then
         TargetNearestEnemy()
-        if not UnitExists("target") then return end
+        targetExists = UnitExists("target")
+        if not targetExists then return end
     end
-    
-    -- Growl for aggro
-    if not HasAggro() and not OnCooldown("Growl") then
-        cast("Growl")
+
+    -- Auto attack - only start if not already in combat
+    if autoAttack and not UnitAffectingCombat("player") and targetExists then
+        AttackTarget()
+    end
+
+    -- Growl for threat (no rage cost)
+    if not IsSpellOnCooldown("Growl") then
+        CastSpellByName("Growl")
         return
     end
-    
-    -- Start auto attack
-    if not PlayerFrame.inCombat then AttackTarget() end
-    
-    -- Auto attack toggle
-    for z = 1, 172 do 
-        if IsAttackAction(z) and not IsCurrentAction(z) then 
-            UseAction(z)
-            break
+
+    -- Faerie Fire priority (no rage cost)
+    if useFaerieFire then
+        local hasFaerieFire = HasDebuff("Spell_Nature_FaerieFire")
+        if not hasFaerieFire and not IsSpellOnCooldown("Faerie Fire (Feral)") then
+            CastSpellByName("Faerie Fire (Feral)()")
+            return
         end
     end
-    
-    -- Combat rotation
-    if not OnCooldown("Faerie Fire (Feral)") and not HasDebuff("target", "Spell_Nature_FaerieFire") then
-        cast("Faerie Fire (Feral)")
-        return
+
+    -- Demoralizing Roar at 40+ rage
+    if useDemoRoar and rage >= demoRoarRageThreshold then
+        local hasDemoRoar = HasDebuff("Ability_Druid_DemoralizingRoar")
+        if not hasDemoRoar and not IsSpellOnCooldown("Demoralizing Roar") then
+            CastSpellByName("Demoralizing Roar")
+            return
+        end
     end
-    
+
+    -- High rage rotation (60+)
     if rage >= 60 then
-        if not OnCooldown("Swipe") then
-            cast("Swipe")
-        else
-            cast("Maul")
+        -- Swipe if available
+        if not IsSpellOnCooldown("Swipe") then
+            CastSpellByName("Swipe")
+            return
         end
-    elseif rage >= 20 then
-        if not HasDebuff("target", "Spell_Nature_Demoralizing") and not OnCooldown("Demoralizing Roar") then
-            cast("Demoralizing Roar")
-        else
-            cast("Maul")
+        -- Maul if Swipe on cooldown
+        if rage >= 15 then
+            CastSpellByName("Maul")
+            return
         end
-    else
-        cast("Maul")
+    end
+
+    -- Medium/Low rage rotation (20+)
+    if rage >= 20 then
+        -- Maul as primary rage spender/builder
+        if rage >= 15 then
+            CastSpellByName("Maul")
+            return
+        end
     end
 end
