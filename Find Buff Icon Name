@@ -1,0 +1,24 @@
+/script FindNameIcon()
+
+function FindNameIcon()
+    DEFAULT_CHAT_FRAME:AddMessage("=== Current Player Buffs ===")
+    
+    local foundBuffs = false
+    
+    -- Check all buff slots (usually 16 max in 1.12)
+    for i = 1, 16 do
+        local texture = UnitBuff("player", i)
+        
+        if texture then
+            foundBuffs = true
+            DEFAULT_CHAT_FRAME:AddMessage("Slot " .. i .. ": " .. texture)
+            DEFAULT_CHAT_FRAME:AddMessage("  ---")
+        end
+    end
+    
+    if not foundBuffs then
+        DEFAULT_CHAT_FRAME:AddMessage("No buffs found!")
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("=== End of Buffs ===")
+end
