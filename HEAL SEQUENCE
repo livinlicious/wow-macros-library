@@ -1,0 +1,153 @@
+/script HealSequence()
+
+
+function HealSequence()
+    -- ===== CONFIGURABLE SETTINGS =====
+    local CRITICAL_SWIFTMEND_THRESHOLD = 0.40
+    local NORMAL_SWIFTMEND_THRESHOLD = 0.70
+    local HT_RANK = 4
+    local REGROWTH_RANK = 0
+    local REJUVENATION_RANK = 0
+    local REJUV_BLOCK_TIME = 12
+    -- ==================================
+    
+    -- Initialize timing system
+    if not RejuvDateTimes then RejuvDateTimes = {} end
+    if not GCDFrame then GCDFrame = CreateFrame("Frame") end
+    
+    -- Get current time in seconds
+    local function GetDateTimeSeconds()
+        local timeStr = date("%H:%M:%S")
+        local hour = tonumber(string.sub(timeStr, 1, 2))
+        local min = tonumber(string.sub(timeStr, 4, 5))
+        local sec = tonumber(string.sub(timeStr, 7, 8))
+        return (hour * 3600) + (min * 60) + sec
+    end
+    
+    -- Determine heal target
+    local t = "player"
+    if UnitExists("target") and UnitIsFriend("player", "target") and not UnitIsDeadOrGhost("target") then
+        t = "target"
+    end
+    local self = (t == "player") and 1 or nil
+    local unitName = UnitName(t)
+    if not unitName then unitName = "Unknown" end
+    
+    -- Check if rejuvenation should be skipped
+    local function ShouldSkipRejuv(unitName)
+        local lastCastTime = RejuvDateTimes[unitName]
+        if lastCastTime then
+            local currentTime = GetTime()
+            local elapsed = currentTime - lastCastTime
+            if elapsed < REJUV_BLOCK_TIME then
+                return true
+            else
+                RejuvDateTimes[unitName] = nil
+            end
+        end
+        return false
+    end
+    
+    -- [All your other functions: GetSpellNameWithRank, IsInTreeForm, CanCastSpell, etc.]
+    local function GetSpellNameWithRank(baseName, rank)
+        if rank == 0 then
+            return baseName
+        else
+            return baseName .. "(Rank " .. rank .. ")"
+        end
+    end
+    
+    local function IsInTreeForm()
+        return buffed("Tree of Life Form", "player") or buffed("Tree of Life Aura", "player")
+    end
+    
+    local function CanCastSpell(spellName)
+        local baseName = spellName
+        local _, _, base = string.find(spellName, "(.+)%(Rank %d+%)")
+        if base then
+            baseName = base
+        end
+        
+        local i = 1
+        while true do
+            local name = GetSpellName(i, BOOKTYPE_SPELL)
+            if not name then break end
+            if name == baseName then
+                local start, duration = GetSpellCooldown(i, BOOKTYPE_SPELL)
+                return start == 0
+            end
+            i = i + 1
+        end
+        return false
+    end
+    
+    -- Get target's health percentage
+    local targetHealth = UnitHealth(t) / UnitHealthMax(t)
+    local inTreeForm = IsInTreeForm()
+    
+    -- Get spell names
+    local rejuvenationSpell = GetSpellNameWithRank("Rejuvenation", REJUVENATION_RANK)
+    local regrowthSpell = GetSpellNameWithRank("Regrowth", REGROWTH_RANK)
+    local healingTouchSpell = GetSpellNameWithRank("Healing Touch", HT_RANK)
+    local swiftmendSpell = "Swiftmend"
+    
+    -- Priority Logic
+    local spellToCast = nil
+    
+    -- Critical emergency Swiftmend
+    if targetHealth <= CRITICAL_SWIFTMEND_THRESHOLD and 
+       (buffed("rejuvenation", t) or buffed("regrowth", t)) and
+       CanCastSpell(swiftmendSpell) then
+        spellToCast = swiftmendSpell
+    -- Normal Swiftmend
+    elseif targetHealth <= NORMAL_SWIFTMEND_THRESHOLD and 
+           buffed("rejuvenation", t) and buffed("regrowth", t) and
+           CanCastSpell(swiftmendSpell) then
+        spellToCast = swiftmendSpell
+    -- IMPROVED: Rejuvenation with GCD-based success detection
+    elseif not buffed("rejuvenation", t) and not ShouldSkipRejuv(unitName) and CanCastSpell(rejuvenationSpell) then 
+        cast(rejuvenationSpell, self)
+        
+        -- Set up delayed GCD check to verify cast success
+        GCDFrame.checkTime = GetTime() + 0.3
+        GCDFrame.targetName = unitName
+        
+        GCDFrame:SetScript("OnUpdate", function()
+            if GetTime() >= GCDFrame.checkTime then
+                -- Check if GCD is still active
+                local start, duration = GetSpellCooldown(154, BOOKTYPE_SPELL)
+                local gcdRemaining = 0
+                if start and duration and duration > 0 then
+                    gcdRemaining = (start + duration) - GetTime()
+                end
+                
+                if gcdRemaining > 0 then
+                    -- Cast succeeded, blacklist the target
+                    RejuvDateTimes[GCDFrame.targetName] = GetTime()
+                end
+                
+                -- Clean up
+                GCDFrame:SetScript("OnUpdate", nil)
+                GCDFrame.checkTime = nil
+                GCDFrame.targetName = nil
+            end
+        end)
+        
+        return -- Exit early since we just cast rejuvenation
+    -- Regrowth
+    elseif not buffed("regrowth", t) and CanCastSpell(regrowthSpell) then 
+        spellToCast = regrowthSpell
+    -- Fallback heal
+    else
+        if inTreeForm then
+            spellToCast = regrowthSpell
+        else
+            spellToCast = healingTouchSpell
+        end
+    end
+    
+    -- Cast the spell (for non-rejuvenation spells)
+    if spellToCast and CanCastSpell(spellToCast) then
+        cast(spellToCast, self)
+    end
+end
