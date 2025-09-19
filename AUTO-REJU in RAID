@@ -1,47 +1,46 @@
-/script AutoReju()
-
-
 function AutoReju()
     -- ===== CONFIGURABLE SETTINGS =====
-    local HEALTH_THRESHOLD = 90
+    local HEALTH_THRESHOLD = 95
     local REJUV_COST = 360
     local REJUV_BLOCK_TIME = 12
     local REJUVENATION_RANK = 0
-    local SCAN_THROTTLE = 0.15
     -- ==================================
-    
-    local start, duration = GetSpellCooldown(61, BOOKTYPE_SPELL)
+
+    local start, duration = GetSpellCooldown(154, BOOKTYPE_SPELL)
     if start > 0 and (GetTime() - start) < duration then return end
     
-    if not AutoRejuLastScan then AutoRejuLastScan = 0 end
-    local currentTime = GetTime()
-    if (currentTime - AutoRejuLastScan) < SCAN_THROTTLE then return end
-    AutoRejuLastScan = currentTime
-    
+
     if UnitMana("player") < REJUV_COST then return end
     if not RejuvDateTimes then RejuvDateTimes = {} end
+    if not GCDFrame then GCDFrame = CreateFrame("Frame") end
     
     local oldTarget = UnitName("target")
-    
-    local function GetDateTimeSeconds()
-        local timeStr = date("%H:%M:%S")
-        local hour = tonumber(string.sub(timeStr, 1, 2))
-        local min = tonumber(string.sub(timeStr, 4, 5))
-        local sec = tonumber(string.sub(timeStr, 7, 8))
-        return (hour * 3600) + (min * 60) + sec
-    end
     
     local function ShouldSkipRejuv(unitName)
         local lastCastTime = RejuvDateTimes[unitName]
         if lastCastTime then
-            local currentTime = GetDateTimeSeconds()
+            local currentTime = GetTime()
             local elapsed = currentTime - lastCastTime
-            if elapsed < 0 then elapsed = elapsed + 86400 end
             if elapsed < REJUV_BLOCK_TIME then
                 return true
             else
                 RejuvDateTimes[unitName] = nil
             end
+        end
+        return false
+    end
+    
+    -- ADDED: Function to check if Rejuvenation is castable (like HEAL SEQUENCE)
+    local function CanCastRejuvenation()
+        local i = 1
+        while true do
+            local name = GetSpellName(i, BOOKTYPE_SPELL)
+            if not name then break end
+            if name == "Rejuvenation" then
+                local start, duration = GetSpellCooldown(i, BOOKTYPE_SPELL)
+                return start == 0
+            end
+            i = i + 1
         end
         return false
     end
@@ -90,12 +89,41 @@ function AutoReju()
     local function CastReju(unit)
         local unitName = UnitName(unit)
         if not unitName then return false end
+        
+        -- ADDED: Check if Rejuvenation is castable before attempting
+        if not CanCastRejuvenation() then return false end
+        
         TargetUnit(unit)
         if UnitExists("target") then
             if CheckInteractDistance("target", 4) or SpellIsTargeting() then
                 local rejuvenationSpell = (REJUVENATION_RANK == 0) and "Rejuvenation()" or "Rejuvenation(Rank " .. REJUVENATION_RANK .. ")"
                 cast(rejuvenationSpell)
-                RejuvDateTimes[unitName] = GetDateTimeSeconds()
+                
+                -- FIXED: Implement GCD success detection like HEAL SEQUENCE
+                GCDFrame.checkTime = GetTime() + 0.3
+                GCDFrame.targetName = unitName
+                
+                GCDFrame:SetScript("OnUpdate", function()
+                    if GetTime() >= GCDFrame.checkTime then
+                        -- Check if GCD is still active using reliable spell slot
+                        local start, duration = GetSpellCooldown(154, BOOKTYPE_SPELL)
+                        local gcdRemaining = 0
+                        if start and duration and duration > 0 then
+                            gcdRemaining = (start + duration) - GetTime()
+                        end
+                        
+                        if gcdRemaining > 0 then
+                            -- Cast succeeded, blacklist the target
+                            RejuvDateTimes[GCDFrame.targetName] = GetTime()
+                        end
+                        
+                        -- Clean up
+                        GCDFrame:SetScript("OnUpdate", nil)
+                        GCDFrame.checkTime = nil
+                        GCDFrame.targetName = nil
+                    end
+                end)
+                
                 return true
             end
         end
