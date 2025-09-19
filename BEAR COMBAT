@@ -1,12 +1,19 @@
 /script BearCombat()
 
-
 function BearCombat()
     -- CONFIG
     local useFaerieFire = true
     local useDemoRoar = true
+    local useSwipe = true
+    local useMaul = true
     local autoAttack = true
+    
+    -- Rage thresholds for spells that need them
     local demoRoarRageThreshold = 30
+    local swipeRageThreshold = 60
+    local maulHighRageThreshold = 60    -- For high rage rotation
+    local maulLowRageThreshold = 20     -- For medium/low rage rotation
+    local maulMinimumRage = 15          -- Minimum rage needed to actually cast Maul
 
     -- Helper functions
     local function GetSpellSlot(spellName)
@@ -61,14 +68,16 @@ function BearCombat()
         AttackTarget()
     end
 
-    -- Growl for threat (no rage cost)
-    if not IsSpellOnCooldown("Growl") then
-        CastSpellByName("Growl")
-        return
+    -- Growl ONLY if target is not targeting me (aggro lost)
+    if targetExists and UnitExists("targettarget") and UnitIsUnit("targettarget", "player") == nil then
+        if not IsSpellOnCooldown("Growl") then
+            CastSpellByName("Growl")
+            return
+        end
     end
 
-    -- Faerie Fire priority (no rage cost)
-    if useFaerieFire then
+    -- Faerie Fire ONLY if target doesn't have Faerie Fire debuff
+    if useFaerieFire and targetExists then
         local hasFaerieFire = HasDebuff("Spell_Nature_FaerieFire")
         if not hasFaerieFire and not IsSpellOnCooldown("Faerie Fire (Feral)") then
             CastSpellByName("Faerie Fire (Feral)()")
@@ -76,7 +85,7 @@ function BearCombat()
         end
     end
 
-    -- Demoralizing Roar at 40+ rage
+    -- Demoralizing Roar (configurable rage threshold)
     if useDemoRoar and rage >= demoRoarRageThreshold then
         local hasDemoRoar = HasDebuff("Ability_Druid_DemoralizingRoar")
         if not hasDemoRoar and not IsSpellOnCooldown("Demoralizing Roar") then
@@ -85,24 +94,24 @@ function BearCombat()
         end
     end
 
-    -- High rage rotation (60+)
-    if rage >= 60 then
-        -- Swipe if available
-        if not IsSpellOnCooldown("Swipe") then
+    -- High rage rotation (configurable threshold)
+    if rage >= swipeRageThreshold then
+        -- Swipe if available and enabled
+        if useSwipe and not IsSpellOnCooldown("Swipe") then
             CastSpellByName("Swipe")
             return
         end
-        -- Maul if Swipe on cooldown
-        if rage >= 15 then
+        -- Maul if Swipe on cooldown or disabled
+        if useMaul and rage >= maulMinimumRage then
             CastSpellByName("Maul")
             return
         end
     end
 
-    -- Medium/Low rage rotation (20+)
-    if rage >= 20 then
+    -- Medium/Low rage rotation (configurable threshold)
+    if rage >= maulLowRageThreshold then
         -- Maul as primary rage spender/builder
-        if rage >= 15 then
+        if useMaul and rage >= maulMinimumRage then
             CastSpellByName("Maul")
             return
         end
