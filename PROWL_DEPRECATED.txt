@@ -1,8 +1,14 @@
 DEPRECATED; just use CleveRoid
 https://github.com/bhhandley/CleveRoidMacros
 
-/cast !Prowl
 
+#showtooltip Prowl
+/cast [noform:3, cooldown:"Prowl"<0.1] Cat Form
+/cast [stealth, myrawpower:>=50] Pounce
+/cast [nostealth, nocombat, form:3] !Prowl
+
+
+---------------
 
 
 /script ProwlRavageMacro()
